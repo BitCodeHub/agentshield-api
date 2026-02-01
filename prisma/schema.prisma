@@ -1,0 +1,131 @@
+// AgentShield API - Prisma Schema
+// Database schema for AI agent governance
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// AI Agent Registry
+model Agent {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  platform    String?  // e.g., "openai", "anthropic", "langchain"
+  version     String?
+  status      AgentStatus @default(ACTIVE)
+  
+  // Human-Agent Binding
+  ownerId     String?
+  ownerEmail  String?
+  ownerName   String?
+  boundAt     DateTime?
+  
+  // Metadata
+  metadata    Json?
+  tags        String[]
+  
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  lastSeenAt  DateTime?
+  
+  // Relations
+  apiKeys     ApiKey[]
+  auditLogs   AuditLog[]
+  policies    Policy[]
+  
+  @@index([ownerId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+enum AgentStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  REVOKED
+}
+
+// API Keys for agent authentication
+model ApiKey {
+  id          String   @id @default(uuid())
+  keyHash     String   @unique
+  name        String?
+  
+  agentId     String
+  agent       Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  
+  expiresAt   DateTime?
+  lastUsedAt  DateTime?
+  createdAt   DateTime @default(now())
+  revokedAt   DateTime?
+  
+  @@index([keyHash])
+  @@index([agentId])
+}
+
+// Audit trail for agent actions
+model AuditLog {
+  id          String   @id @default(uuid())
+  
+  agentId     String
+  agent       Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  
+  action      String   // e.g., "tool.call", "api.request", "policy.check"
+  resource    String?  // What was accessed
+  outcome     String   // "allowed", "denied", "error"
+  
+  metadata    Json?
+  ipAddress   String?
+  userAgent   String?
+  
+  createdAt   DateTime @default(now())
+  
+  @@index([agentId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+// Governance policies
+model Policy {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  
+  agentId     String?
+  agent       Agent?   @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  
+  // Policy rules (JSON)
+  rules       Json
+  
+  isActive    Boolean  @default(true)
+  priority    Int      @default(0)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([agentId])
+  @@index([isActive])
+}
+
+// Human owners/users
+model Owner {
+  id          String   @id @default(uuid())
+  email       String   @unique
+  name        String?
+  
+  // Organization
+  orgId       String?
+  orgName     String?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([email])
+  @@index([orgId])
+}
